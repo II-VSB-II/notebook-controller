@@ -31,8 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	apiv1 "github.com/II-VSB-II/notebook-controller"
+	v1 "github.com/II-VSB-II/notebook-controller"
 	"github.com/II-VSB-II/notebook-controller/controllers"
+	controller_metrics "github.com/II-VSB-II/notebook-controller/pkg/metrics"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -44,19 +45,24 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(apiv1.AddToScheme(scheme))
+	utilruntime.Must(v1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
 func main() {
-	var metricsAddr string
+	var metricsAddr, leaderElectionNamespace string
 	var enableLeaderElection bool
 	var probeAddr string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+	var Burst int
+	var QPS int
+	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "probe-addr", ":8081", "The address the health endpoint binds to.")
+	flag.StringVar(&leaderElectionNamespace, "leader-election-namespace", "",
+		"Determines the namespace in which the leader election configmap will be created.")
+	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
+		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	flag.IntVar(&Burst, "burst", 0, "If it's zero, the created RESTClient will use DefaultBurst")
+	flag.IntVar(&QPS, "qps", 0, "If it's zero, the created RESTClient will use DefaultQPS")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -90,8 +96,11 @@ func main() {
 	}
 
 	if err = (&controllers.NotebookReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Log:           ctrl.Log.WithName("controllers").WithName("Notebook"),
+		Scheme:        mgr.GetScheme(),
+		Metrics:       controller_metrics.NewMetrics(mgr.GetClient()),
+		EventRecorder: mgr.GetEventRecorderFor("notebook-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Notebook")
 		os.Exit(1)
