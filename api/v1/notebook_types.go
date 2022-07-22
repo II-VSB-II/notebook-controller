@@ -29,9 +29,9 @@ type NotebookSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	User      string   `json:"user,omitempty"`
-	Project   string   `json:"project,omitempty"`
-	CanAccess []string `json:"canAccess,omitempty"`
+	User    string   `json:"user,omitempty"`
+	Project string   `json:"project,omitempty"`
+	Access  []string `json:"access,omitempty"`
 
 	// Foo is an example field of Notebook. Edit notebook_types.go to remove/update
 	Template NotebookTemplateSpec `json:"template,omitempty"`

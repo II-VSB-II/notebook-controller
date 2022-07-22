@@ -140,6 +140,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil && apierrs.IsNotFound(err) {
 		log.Info("Creating StatefulSet", "in namespace", ss.Namespace, "name", ss.Name)
 		r.Metrics.NotebookCreation.WithLabelValues(ss.Namespace).Inc()
+
 		err = r.Create(ctx, ss)
 		justCreated = true
 		if err != nil {
@@ -419,7 +420,7 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 		replicas = 0
 	}
 
-	fmt.Println(instance)
+	fmt.Println(instance.Spec.User, instance.Spec.Project)
 
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -493,8 +494,10 @@ func generateService(instance *v1.Notebook) *corev1.Service {
 			Namespace: instance.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
-			Type:     "NodePort",
-			Selector: map[string]string{"statefulset": instance.Name},
+			Type: "NodePort",
+			Selector: map[string]string{
+				"statefulset": instance.Name,
+			},
 			Ports: []corev1.ServicePort{
 				{
 					// Make port name follow Istio pattern so it can be managed by istio rbac

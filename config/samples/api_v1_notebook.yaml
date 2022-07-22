@@ -8,11 +8,10 @@ spec:
     spec:
       containers:
         - name: notebook-sample-v1
-          image: gcr.io/kubeflow-images-public/tensorflow-1.14.0-notebook-cpu:v1.0.0
-
+          image: public.ecr.aws/j1r0q0g6/notebooks/notebook-servers/jupyter:v1.5.0
   user: "abc"
   project: "def"
-  canAccess:
+  access:
   - '2313'
   - '2141'
   
