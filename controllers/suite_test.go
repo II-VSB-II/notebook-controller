@@ -30,7 +30,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	apiv1 "sandatasystem.com/notebook/api/v1"
+	apiv1 "github.com/II-VSB-II/notebook-controller/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 

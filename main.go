@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	apiv1 "sandatasystem.com/notebook/api/v1"
-	"sandatasystem.com/notebook/controllers"
+	apiv1 "github.com/II-VSB-II/notebook-controller"
+	"github.com/II-VSB-II/notebook-controller/controllers"
 	//+kubebuilder:scaffold:imports
 )
 

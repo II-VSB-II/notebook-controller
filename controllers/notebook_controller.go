@@ -42,11 +42,11 @@ import (
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1 "github.com/II-VSB-II/notebook-controller/api/v1"
 	reconcilehelper "github.com/II-VSB-II/notebook-controller/common/reconcilehelper"
 	"github.com/II-VSB-II/notebook-controller/pkg/culler"
 	"github.com/II-VSB-II/notebook-controller/pkg/metrics"
 	"github.com/go-logr/logr"
-	v1 "sandatasystem.com/notebook/api/v1"
 )
 
 const DefaultContainerPort = 8888
