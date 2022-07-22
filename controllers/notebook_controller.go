@@ -124,7 +124,8 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	instance := &v1.Notebook{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		log.Error(err, "unable to fetch Notebook")
-		return ctrl.Result{}, ignoreNotFound(err)
+		//return ctrl.Result{}, ignoreNotFound(err)
+		return ctrl.Result{}, nil
 	}
 
 	// Reconcile StatefulSet
@@ -418,6 +419,8 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 		replicas = 0
 	}
 
+	fmt.Println(instance)
+
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name,
@@ -490,7 +493,7 @@ func generateService(instance *v1.Notebook) *corev1.Service {
 			Namespace: instance.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
-			Type:     "ClusterIP",
+			Type:     "NodePort",
 			Selector: map[string]string{"statefulset": instance.Name},
 			Ports: []corev1.ServicePort{
 				{
