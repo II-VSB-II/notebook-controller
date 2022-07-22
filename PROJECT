@@ -1,0 +1,16 @@
+domain: sandatasystem.com
+layout:
+- go.kubebuilder.io/v3
+projectName: notebook-controller
+repo: sandatasystem.com/notebook
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sandatasystem.com
+  group: api
+  kind: Notebook
+  path: sandatasystem.com/notebook/api/v1
+  version: v1
+version: "3"
