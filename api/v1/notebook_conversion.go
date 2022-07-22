@@ -18,18 +18,18 @@ package v1
 import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
-	nbv1beta1 "github.com/II-VSB-II/notebook-controller/api/v1"
+	v1 "github.com/II-VSB-II/notebook-controller/api/v1"
 )
 
 // ConvertTo converts this Notebook to the Hub version (v1beta1).
 func (src *Notebook) ConvertTo(dstRaw conversion.Hub) error {
-	dst := dstRaw.(*nbv1beta1.Notebook)
+	dst := dstRaw.(*v1.Notebook)
 	dst.Spec.Template.Spec = src.Spec.Template.Spec
 	dst.Status.ReadyReplicas = src.Status.ReadyReplicas
 	dst.Status.ContainerState = src.Status.ContainerState
-	conditions := []nbv1beta1.NotebookCondition{}
+	conditions := []v1.NotebookCondition{}
 	for _, c := range src.Status.Conditions {
-		newc := nbv1beta1.NotebookCondition{
+		newc := v1.NotebookCondition{
 			Type:          c.Type,
 			LastProbeTime: c.LastProbeTime,
 			Reason:        c.Reason,
@@ -49,7 +49,7 @@ Most of the conversion is straightforward copying, except for converting our cha
 
 // ConvertFrom converts from the Hub version (v1beta1) to this version.
 func (dst *Notebook) ConvertFrom(srcRaw conversion.Hub) error {
-	src := srcRaw.(*nbv1beta1.Notebook)
+	src := srcRaw.(*v1.Notebook)
 	dst.Spec.Template.Spec = src.Spec.Template.Spec
 	dst.Status.ReadyReplicas = src.Status.ReadyReplicas
 	dst.Status.ContainerState = src.Status.ContainerState
