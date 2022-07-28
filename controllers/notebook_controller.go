@@ -73,9 +73,12 @@ type NotebookReconciler struct {
 	EventRecorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=api.sandatasystem.com,resources=notebooks,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=api.sandatasystem.com,resources=notebooks/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=api.sandatasystem.com,resources=notebooks/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=core,resources=services,verbs="*"
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs="*"
+// +kubebuilder:rbac:groups=api.sandatasystem.com,resources=notebooks;notebooks/status;notebooks/finalizers,verbs="*"
+// +kubebuilder:rbac:groups="networking.istio.io",resources=virtualservices,verbs="*"
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -113,7 +116,6 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Info("Emitting Notebook Event.", "Event", event)
 		r.EventRecorder.Eventf(involvedNotebook, event.Type, event.Reason,
 			"Reissued from %s/%s: %s", strings.ToLower(event.InvolvedObject.Kind), event.InvolvedObject.Name, event.Message)
-		return ctrl.Result{}, nil
 	}
 
 	if getEventErr != nil && !apierrs.IsNotFound(getEventErr) {
@@ -131,14 +133,14 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Reconcile StatefulSet
 	ss := generateStatefulSet(instance)
 	if err := ctrl.SetControllerReference(instance, ss, r.Scheme); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, ignoreNotFound(err)
 	}
 	// Check if the StatefulSet already exists
 	foundStateful := &appsv1.StatefulSet{}
 	justCreated := false
 	err := r.Get(ctx, types.NamespacedName{Name: ss.Name, Namespace: ss.Namespace}, foundStateful)
 	if err != nil && apierrs.IsNotFound(err) {
-		log.Info("Creating StatefulSet", "in namespace", ss.Namespace, "name", ss.Name)
+		log.Info("Creating StatefulSet", "namespace", ss.Namespace, "name", ss.Name)
 		r.Metrics.NotebookCreation.WithLabelValues(ss.Namespace).Inc()
 
 		err = r.Create(ctx, ss)
@@ -154,7 +156,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	// Update the foundStateful object and write the result back if there are any changes
 	if !justCreated && reconcilehelper.CopyStatefulSetFields(ss, foundStateful) {
-		log.Info("Updating StatefulSet", "in namespace", ss.Namespace, "name", ss.Name)
+		log.Info("Updating StatefulSet", "namespace", ss.Namespace, "name", ss.Name)
 		err = r.Update(ctx, foundStateful)
 		if err != nil {
 			log.Error(err, "unable to update Statefulset")
@@ -172,7 +174,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	justCreated = false
 	err = r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && apierrs.IsNotFound(err) {
-		log.Info("Creating Service", "in namespace", service.Namespace, "name", service.Name)
+		log.Info("Creating Service", "namespace", service.Namespace, "name", service.Name)
 		err = r.Create(ctx, service)
 		justCreated = true
 		if err != nil {
@@ -185,7 +187,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	// Update the foundService object and write the result back if there are any changes
 	if !justCreated && reconcilehelper.CopyServiceFields(service, foundService) {
-		log.Info("Updating Service", "in namespace", service.Namespace, "name", service.Name)
+		log.Info("Updating Service", "namespace", service.Namespace, "name", service.Name)
 		err = r.Update(ctx, foundService)
 		if err != nil {
 			log.Error(err, "unable to update Service")
@@ -426,6 +428,10 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name,
 			Namespace: instance.Namespace,
+			Labels: map[string]string{
+				"user":    instance.Spec.User,
+				"project": instance.Spec.Project,
+			},
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &replicas,
@@ -438,8 +444,10 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{
 					"statefulset":   instance.Name,
 					"notebook-name": instance.Name,
+					"user":          instance.Spec.User,
+					"project":       instance.Spec.Project,
 				}},
-				Spec: *instance.Spec.Template.Spec.DeepCopy(),
+				Spec: instance.Spec.Template.Spec,
 			},
 		},
 	}
@@ -464,7 +472,7 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 		}
 	}
 
-	// setPrefixEnvVar(instance, container)
+	setPrefixEnvVar(instance, container)
 
 	// For some platforms (like OpenShift), adding fsGroup: 100 is troublesome.
 	// This allows for those platforms to bypass the automatic addition of the fsGroup
@@ -492,6 +500,10 @@ func generateService(instance *v1.Notebook) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      instance.Name,
 			Namespace: instance.Namespace,
+			Labels: map[string]string{
+				"user":    instance.Spec.User,
+				"project": instance.Spec.Project,
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Type: "NodePort",
@@ -600,6 +612,7 @@ func generateVirtualService(instance *v1.Notebook) (*unstructured.Unstructured, 
 					},
 				},
 			},
+			"timeout": "300s",
 		},
 	}
 

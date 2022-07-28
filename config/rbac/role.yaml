@@ -9,6 +9,29 @@ rules:
   - api.sandatasystem.com
   resources:
   - notebooks
+  - notebooks/finalizers
+  - notebooks/status
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
   verbs:
   - create
   - delete
@@ -18,16 +41,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - api.sandatasystem.com
+  - ""
   resources:
-  - notebooks/finalizers
+  - services
   verbs:
-  - update
+  - '*'
 - apiGroups:
-  - api.sandatasystem.com
+  - networking.istio.io
   resources:
-  - notebooks/status
+  - virtualservices
   verbs:
-  - get
-  - patch
-  - update
+  - '*'
