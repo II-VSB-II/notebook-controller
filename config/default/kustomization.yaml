@@ -1,5 +1,5 @@
 # Adds namespace to all resources.
-namespace: notebook-controller-system
+namespace: mlp
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
@@ -11,6 +11,10 @@ namePrefix: notebook-controller-
 # Labels to add to all resources and selectors.
 #commonLabels:
 #  someName: someValue
+
+commonLabels:
+  app: mlp-notebook-controller
+  kustomize.component: mlp-notebook-controller
 
 bases:
 - ../crd
@@ -28,7 +32,7 @@ patchesStrategicMerge:
 # Protect the /metrics endpoint by putting it behind auth.
 # If you want your controller-manager to expose the /metrics
 # endpoint w/o any authn/z, please comment the following line.
-- manager_auth_proxy_patch.yaml
+- remove-namespace.yaml
 
 # Mount the controller config file for loading manager configurations
 # through a ComponentConfig type

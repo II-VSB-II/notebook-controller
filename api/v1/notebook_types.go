@@ -21,21 +21,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// +genclient
-
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // NotebookSpec defines the desired state of Notebook
+
 type NotebookSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	User    string   `json:"user,omitempty"`
-	Project string   `json:"project,omitempty"`
-	Access  []string `json:"access,omitempty"`
-
-	// Foo is an example field of Notebook. Edit notebook_types.go to remove/update
+	User     string               `json:"user,omitempty"`
+	Project  string               `json:"project,omitempty"`
+	Access   []string             `json:"access,omitempty"`
 	Template NotebookTemplateSpec `json:"template,omitempty"`
 }
 
@@ -74,14 +71,21 @@ type NotebookCondition struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 // +kubebuilder:resource:path=notebooks,singular=notebook,scope=Namespaced
-
+// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".endpoint"
+// +kubebuilder:printcolumn:name="CreatedBy",type="string",JSONPath=".spec.user"
+// +kubebuilder:printcolumn:name="Project",type="string",JSONPath=".spec.project"
+// +kubebuilder:printcolumn:name="Persistent",type="string",JSONPath=".persistent"
+// +kubebuilder:printcolumn:name="CreatedAt",type="string",JSONPath="..metadata.creationTimestamp"
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[0].type"
 // Notebook is the Schema for the notebooks API
 type Notebook struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   NotebookSpec   `json:"spec,omitempty"`
-	Status NotebookStatus `json:"status,omitempty"`
+	Spec       NotebookSpec   `json:"spec,omitempty"`
+	Status     NotebookStatus `json:"status,omitempty"`
+	Endpoint   string         `json:"endpoint,omitempty"`
+	Persistent string         `json:"persistent,omitempty"`
 }
 
 //+kubebuilder:object:root=true

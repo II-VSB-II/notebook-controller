@@ -54,6 +54,10 @@ const DefaultServingPort = 80
 const AnnotationRewriteURI = "notebooks.sandatasystem.com/http-rewrite-uri"
 const AnnotationHeadersRequestSet = "notebooks.sandatasystem.com/http-headers-request-set"
 const PrefixEnvVar = "NB_PREFIX"
+const PERSISTENT = false
+
+const SECRET = "mlp-secret"
+const SECRET_NS = "mlp"
 
 const DefaultFSGroup = int64(100)
 
@@ -76,6 +80,7 @@ type NotebookReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=events,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=core,resources=services,verbs="*"
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs="*"
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs="*"
 // +kubebuilder:rbac:groups=api.sandatasystem.com,resources=notebooks;notebooks/status;notebooks/finalizers,verbs="*"
 // +kubebuilder:rbac:groups="networking.istio.io",resources=virtualservices,verbs="*"
@@ -130,19 +135,49 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
+	if len(instance.Spec.Template.Spec.Volumes) > 0 {
+		instance.Persistent = "true"
+		instance.Endpoint = "http://"
+	} else {
+		instance.Persistent = "false"
+		instance.Endpoint = "http://"
+	}
+
+	errrr := r.Update(ctx, instance)
+	if errrr != nil {
+		return ctrl.Result{}, errrr
+	}
+
+	// jupyter-web-app deletes objects using foreground deletion policy, Notebook CR will stay until all owned objects are deleted
+	// reconcile loop might keep on trying to recreate the resources that the API server tries to delete.
+	// so when Notebook CR is terminating, reconcile loop should do nothing
+
+	if !instance.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, nil
+	}
+	data := make(map[string][]uint8)
+	foundSecret := &corev1.Secret{}
+	errr := r.Get(ctx, types.NamespacedName{Name: SECRET, Namespace: SECRET_NS}, foundSecret)
+	if errr != nil && apierrs.IsNotFound(errr) {
+		log.Info("Secret not found", "namespace", SECRET_NS, "name", SECRET)
+
+	} else {
+		data = foundSecret.Data
+	}
+
 	// Reconcile StatefulSet
-	ss := generateStatefulSet(instance)
+	ss := generateStatefulSet(instance, data)
 	if err := ctrl.SetControllerReference(instance, ss, r.Scheme); err != nil {
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 	// Check if the StatefulSet already exists
 	foundStateful := &appsv1.StatefulSet{}
 	justCreated := false
+
 	err := r.Get(ctx, types.NamespacedName{Name: ss.Name, Namespace: ss.Namespace}, foundStateful)
 	if err != nil && apierrs.IsNotFound(err) {
 		log.Info("Creating StatefulSet", "namespace", ss.Namespace, "name", ss.Name)
 		r.Metrics.NotebookCreation.WithLabelValues(ss.Namespace).Inc()
-
 		err = r.Create(ctx, ss)
 		justCreated = true
 		if err != nil {
@@ -188,6 +223,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Update the foundService object and write the result back if there are any changes
 	if !justCreated && reconcilehelper.CopyServiceFields(service, foundService) {
 		log.Info("Updating Service", "namespace", service.Namespace, "name", service.Name)
+
 		err = r.Update(ctx, foundService)
 		if err != nil {
 			log.Error(err, "unable to update Service")
@@ -221,9 +257,11 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// This should be reconciled by the StatefulSet
 		log.Info("Pod not found...")
 	} else if err != nil {
+
 		return ctrl.Result{}, err
 	} else {
 		// Got the pod
+
 		podFound = true
 
 		// Update status of the CR using the ContainerState of
@@ -242,6 +280,7 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				log.Info("Updating Notebook CR state: ", "namespace", instance.Namespace, "name", instance.Name)
 				cs := pod.Status.ContainerStatuses[i].State
 				instance.Status.ContainerState = cs
+
 				oldConditions := instance.Status.Conditions
 				newCondition := getNextCondition(cs)
 				// Append new condition
@@ -250,7 +289,12 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 					oldConditions[0].Message != newCondition.Message {
 					log.Info("Appending to conditions: ", "namespace", instance.Namespace, "name", instance.Name, "type", newCondition.Type, "reason", newCondition.Reason, "message", newCondition.Message)
 					instance.Status.Conditions = append([]v1.NotebookCondition{newCondition}, oldConditions...)
+					maxHistoryLimit := 1
+					if len(instance.Status.Conditions) > maxHistoryLimit {
+						instance.Status.Conditions = instance.Status.Conditions[:len(instance.Status.Conditions)-1]
+					}
 				}
+
 				err = r.Status().Update(ctx, instance)
 				if err != nil {
 					return ctrl.Result{}, err
@@ -320,7 +364,6 @@ func (r *NotebookReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: culler.GetRequeueTime()}, nil
 	}
 	return ctrl.Result{RequeueAfter: culler.GetRequeueTime()}, nil
-
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -400,23 +443,27 @@ func getNextCondition(cs corev1.ContainerState) v1.NotebookCondition {
 	return newCondition
 }
 
-func setPrefixEnvVar(instance *v1.Notebook, container *corev1.Container) {
-	prefix := "/notebook/" + instance.Namespace + "/" + instance.Name
+func setENV(instance *v1.Notebook, container *corev1.Container, data map[string][]uint8) {
 
-	for _, envVar := range container.Env {
-		if envVar.Name == PrefixEnvVar {
-			envVar.Value = prefix
-			return
-		}
+	for key := range data {
+		container.Env = append(container.Env, corev1.EnvVar{
+			Name:  key,
+			Value: string(data[key]),
+		})
 	}
 
 	container.Env = append(container.Env, corev1.EnvVar{
-		Name:  PrefixEnvVar,
-		Value: prefix,
+		Name:  "PROJECT",
+		Value: instance.Spec.Project,
+	})
+
+	container.Env = append(container.Env, corev1.EnvVar{
+		Name:  "CAN_ACCESS",
+		Value: strings.Join(instance.Spec.Access, ","),
 	})
 }
 
-func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
+func generateStatefulSet(instance *v1.Notebook, data map[string][]uint8) *appsv1.StatefulSet {
 	replicas := int32(1)
 	if culler.StopAnnotationIsSet(instance.ObjectMeta) {
 		replicas = 0
@@ -472,7 +519,7 @@ func generateStatefulSet(instance *v1.Notebook) *appsv1.StatefulSet {
 		}
 	}
 
-	setPrefixEnvVar(instance, container)
+	setENV(instance, container, data)
 
 	// For some platforms (like OpenShift), adding fsGroup: 100 is troublesome.
 	// This allows for those platforms to bypass the automatic addition of the fsGroup
@@ -620,7 +667,6 @@ func generateVirtualService(instance *v1.Notebook) (*unstructured.Unstructured, 
 	if err := unstructured.SetNestedSlice(vsvc.Object, http, "spec", "http"); err != nil {
 		return nil, fmt.Errorf("Set .spec.http error: %v", err)
 	}
-
 	return vsvc, nil
 
 }
@@ -734,6 +780,5 @@ func predNBEvents(r *NotebookReconciler) predicate.Funcs {
 	predicates.DeleteFunc = func(e event.DeleteEvent) bool {
 		return false
 	}
-
 	return predicates
 }

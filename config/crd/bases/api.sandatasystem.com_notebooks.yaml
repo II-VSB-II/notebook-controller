@@ -15,7 +15,26 @@ spec:
     singular: notebook
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .endpoint
+      name: Endpoint
+      type: string
+    - jsonPath: .spec.user
+      name: CreatedBy
+      type: string
+    - jsonPath: .spec.project
+      name: Project
+      type: string
+    - jsonPath: .persistent
+      name: Persistent
+      type: string
+    - jsonPath: ..metadata.creationTimestamp
+      name: CreatedAt
+      type: string
+    - jsonPath: .status.conditions[0].type
+      name: Status
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         description: Notebook is the Schema for the notebooks API
@@ -25,6 +44,8 @@ spec:
               of an object. Servers should convert recognized schemas to the latest
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
+          endpoint:
+            type: string
           kind:
             description: 'Kind is a string value representing the REST resource this
               object represents. Servers may infer this from the endpoint the client
@@ -32,8 +53,9 @@ spec:
             type: string
           metadata:
             type: object
+          persistent:
+            type: string
           spec:
-            description: NotebookSpec defines the desired state of Notebook
             properties:
               access:
                 items:
@@ -42,8 +64,6 @@ spec:
               project:
                 type: string
               template:
-                description: Foo is an example field of Notebook. Edit notebook_types.go
-                  to remove/update
                 properties:
                   spec:
                     description: PodSpec is a description of a pod.

@@ -23,3 +23,8 @@ testbin/*
 *.swp
 *.swo
 *~
+.vscode/targets.log
+.vscode/settings.json
+.vscode/dryrun.log
+.vscode/configurationCache.log
+manager

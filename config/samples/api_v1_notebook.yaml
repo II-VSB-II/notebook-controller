@@ -7,11 +7,13 @@ spec:
   template:
     spec:
       containers:
-        - name: notebook-sample-v1
-          image: public.ecr.aws/j1r0q0g6/notebooks/notebook-servers/jupyter:v1.5.0
-  user: "abc"
-  project: "def"
+        - name: notebook-sample
+          imagePullPolicy: Always
+          #image: public.ecr.aws/j1r0q0g6/notebooks/notebook-servers/jupyter:v1.5.0
+          image: ilovepython/jupyterhub:1.0
+  user: "localhost1"
+  project: "0f0100f7-19a4-4e1b-9491-63666fa819c2"
   access:
-  - '2313'
-  - '2141'
+  - 'localhost1'
+  - 'localhost2'
   
